@@ -120,7 +120,7 @@ int main() {
     };
 
     FixedFrequencyLoop ffl;
-    ffl.start(240, tick, termination);
+    ffl.start(512, tick, termination);
 
     return 0;
     /**/

@@ -71,5 +71,5 @@ int main() {
     };
     std::function<bool()> termination = [&]() { return false; };
     FixedFrequencyLoop ffl;
-    ffl.start(240, tick, termination);
+    ffl.start(512, tick, termination);
 }
