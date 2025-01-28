@@ -117,6 +117,7 @@ int main() {
 
         curr_id++;
         std::cout << "=== TICK END ===" << std::endl;
+        std::cout << "client sending at: " << network.average_bits_per_second_sent() << "bps" << std::endl;
     };
 
     FixedFrequencyLoop ffl;

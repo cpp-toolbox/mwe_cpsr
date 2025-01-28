@@ -46,3 +46,6 @@
 [submodule "server/src/utility/fixed_frequency_processor"]
 	path = server/src/utility/fixed_frequency_processor
 	url = git@github.com:cpp-toolbox/fixed_frequency_processor.git
+[submodule "client/src/utility/limited_vector"]
+	path = client/src/utility/limited_vector
+	url = git@github.com:cpp-toolbox/limited_vector.git
