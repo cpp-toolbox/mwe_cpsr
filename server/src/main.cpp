@@ -2,18 +2,47 @@
 #include "networking/server_networking/network.hpp"
 #include "utility/fixed_frequency_loop/fixed_frequency_loop.hpp"
 #include "utility/fixed_frequency_processor/fixed_frequency_processor.hpp"
+#include "utility/transform/transform.hpp"
+#include <format>
+#include <string>
 
 struct GameUpdate {
-    double position;
+    double position_x;
+    double position_y;
+    double velocity_x;
+    double velocity_y;
+
     int last_id_used_to_produce_this_update;
 
     // Overloading the << operator
     friend std::ostream &operator<<(std::ostream &os, const GameUpdate &update) {
-        os << "GameUpdate { position: " << update.position
+        os << "GameUpdate { position: " << update.position_x << ", " << update.position_y
            << ", last_id_used_to_produce_this_update: " << update.last_id_used_to_produce_this_update << " }";
         return os;
     }
 };
+
+struct KeyboardUpdate {
+    int id;
+    bool forward_pressed = false;
+    bool backwards_pressed = false;
+    bool left_pressed = false;
+    bool right_pressed = false;
+
+    friend std::ostream &operator<<(std::ostream &os, const KeyboardUpdate &update) {
+        os << "KeyboardUpdate{id: " << update.id << ", forward_pressed: " << update.forward_pressed
+           << ", backwards_pressed: " << update.backwards_pressed << ", left_pressed: " << update.left_pressed
+           << ", right_pressed: " << update.right_pressed << "}";
+        return os;
+    }
+};
+
+constexpr bool printing_active = true;
+void p(std::string s) {
+    if (printing_active) {
+        std::cout << s << std::endl;
+    }
+}
 
 int main() {
     auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
@@ -38,33 +67,60 @@ int main() {
 
     network.set_on_connect_callback(on_client_connect);
 
-    double position = 0;
-    double velocity = 1;
+    std::unordered_map<int, KeyboardUpdate> id_to_keyboard_update;
+
+    Transform transform;
+    float acceleration = 10 * 0.01;
+    float friction = 0.99;
+    glm::vec2 current_velocity(0);
 
     std::function<void(int, double)> physics_tick = [&](int id, double dt) {
-        position += velocity * dt;
-        std::cout << "processing id: " << id << " with dt: " << dt << " new position: " << position << std::endl;
+        // Retrieve the latest keyboard state for this id
+        auto it = id_to_keyboard_update.find(id);
+        if (it == id_to_keyboard_update.end()) {
+            p(std::format("No input for id: {}", id));
+            return;
+        }
+
+        const KeyboardUpdate &input = it->second;
+
+        glm::vec2 input_vector(static_cast<int>(input.right_pressed) - static_cast<int>(input.left_pressed),
+                               static_cast<int>(input.forward_pressed) - static_cast<int>(input.backwards_pressed));
+
+        p(std::format("Input Vector: ({}, {})", input_vector.x, input_vector.y));
+
+        current_velocity += input_vector * acceleration * static_cast<float>(dt);
+        current_velocity *= friction;
+
+        glm::vec3 xy_velocity(current_velocity, 0);
+        transform.position += xy_velocity * static_cast<float>(dt);
+
+        p(std::format("processing id: {} with dt: {} new position: {}", id, dt, transform.get_string_repr()));
     };
 
     FixedFrequencyProcessor physics_engine(60, physics_tick);
-    PeriodicSignal send_signal(20);
+    PeriodicSignal send_signal(60);
 
     std::function<void(double)> tick = [&](double dt) {
         std::vector<PacketWithSize> received_packets = network.get_network_events_since_last_tick();
         for (const auto &packet : received_packets) {
-            const int *received_id = reinterpret_cast<const int *>(packet.data.data());
-            std::cout << "just got id: " << *received_id << std::endl;
-            physics_engine.add_id(*received_id);
+            const KeyboardUpdate *received_keyboard_update =
+                reinterpret_cast<const KeyboardUpdate *>(packet.data.data());
+
+            p(std::format("keyboard update just received: {}", received_keyboard_update->id));
+            physics_engine.add_id(received_keyboard_update->id);
+            id_to_keyboard_update[received_keyboard_update->id] = *received_keyboard_update;
         }
 
         if (physics_engine.attempt_to_process()) {
-            std::cout << "^^^ just processed ^^^" << std::endl;
+            p("^^^ just processed ^^^");
         }
 
         if (test_client_id != -1) {
             if (physics_engine.processed_at_least_one_id and send_signal.process_and_get_signal()) {
-                GameUpdate gu(position, physics_engine.get_last_processed_id());
-                std::cout << "SENDING PACKET: " << gu << std::endl;
+                GameUpdate gu(transform.position.x, transform.position.y, current_velocity.x, current_velocity.y,
+                              physics_engine.get_last_processed_id());
+                std::cout << "sending game update: " << gu << std::endl;
                 network.unreliable_send(test_client_id, &gu, sizeof(GameUpdate));
             }
         }

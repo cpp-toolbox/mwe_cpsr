@@ -9,7 +9,8 @@ file(GLOB_RECURSE SOURCES "src/*.cpp")
 # Add the main executable
 add_executable(${PROJECT_NAME} ${SOURCES})
 
-
 find_package(spdlog)
 find_package(enet)
-target_link_libraries(${PROJECT_NAME} spdlog::spdlog enet::enet)
+find_package(glfw3)
+find_package(glad)
+target_link_libraries(${PROJECT_NAME} spdlog::spdlog enet::enet glfw glad::glad)

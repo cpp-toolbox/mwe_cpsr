@@ -1,6 +1,8 @@
 [requires]
 spdlog/1.14.1
 enet/1.3.18
+glfw/3.4
+glad/0.1.36
 
 [generators]
 CMakeDeps
